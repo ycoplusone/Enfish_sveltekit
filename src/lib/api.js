@@ -6,7 +6,7 @@
 
 import qs from "qs"
 
-import { access_token , user_nm , user_id , email , is_login }     from "$lib/stores/test.js";    // 스토어
+import { access_token , user_nm , user_id , user_email , is_login , resetUserStores }     from "$lib/stores/Info.js";    // 스토어
 import { get }      from 'svelte/store'
 import { goto }     from '$app/navigation'; // 페이지 이동
 
@@ -60,13 +60,16 @@ const fastapi = (operation, url, params, success_callback, failure_callback) => 
                             success_callback(json)
                         }
                     }else if(operation !== 'login' && response.status === 401) { // token time out
+                        resetUserStores();
+                        /*
                         access_token.set('');
                         user_nm.set('');
                         user_id.set('');
-                        email.set('');
+                        user_email.set('');
                         is_login.set(false);
+                        */
                         alert("로그인이 필요합니다.");
-                        goto('/test/UserLogin');
+                        goto('/');
                     }else {
                         if (failure_callback) {
                             failure_callback(json)
