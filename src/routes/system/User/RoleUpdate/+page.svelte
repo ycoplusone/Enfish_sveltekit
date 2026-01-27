@@ -388,7 +388,7 @@
     border-bottom: 1px solid #eee; padding: 10px; font-size: 12px; text-align: left; color: #555;
   }
   .table tbody td { border-bottom: 1px solid #f0f0f0; padding: 10px; vertical-align: top; }
-  tr.busy { opacity: 0.6; }
+  
 
   .cell-main .primary { font-weight: 600; }
   .cell-main .secondary { margin-top: 2px; font-size: 12px; color: #666; }
