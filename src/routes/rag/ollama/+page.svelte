@@ -1,10 +1,15 @@
 <script>
-  import { onMount, tick } from 'svelte';  
-  import fastapi                          from "$lib/api.js";             // api 호출 모듈
+  import { onMount, tick, onDestroy } from 'svelte';
+  import fastapi from "$lib/api.js";
 
   let input = '';
-  let isLoading = false;
   let listEl;
+  let isLoading = false;
+
+  // ✅ 소요시간 상태
+  let startedAt = 0;
+  let elapsedMs = 0;
+  let timerId = null;
 
   let messages = [
     {
@@ -19,9 +24,9 @@
     messages = [
       ...messages,
       {
-        id: crypto.randomUUID(),
-        role,
-        content: String(content ?? ''),
+        id: crypto.randomUUID() ,
+        role ,
+        content: String(content ?? '') ,
         createdAt: Date.now()
       }
     ];
@@ -33,7 +38,6 @@
   }
 
   function extractAnswer(payload) {
-    // 백엔드 응답 필드가 확정되지 않았으므로 안전하게 처리
     if (payload == null) return '';
     if (typeof payload === 'string') return payload;
 
@@ -42,7 +46,6 @@
       if (typeof payload[k] === 'string' && payload[k].trim()) return payload[k];
     }
 
-    // 없으면 JSON pretty
     try {
       return JSON.stringify(payload, null, 2);
     } catch {
@@ -50,34 +53,69 @@
     }
   }
 
+  // ✅ ms → 사람이 읽기 좋은 형태
+  function formatMs(ms) {
+    const sec = Math.floor(ms / 1000);
+    const tenth = Math.floor((ms % 1000) / 100);
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    return min > 0 ? `${min}m ${s}.${tenth}s` : `${s}.${tenth}s`;
+  }
+
+  function startTimer() {
+    startedAt = performance.now();
+    elapsedMs = 0;
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      elapsedMs = performance.now() - startedAt;
+    }, 100);
+  }
+
+  function stopTimer() {
+    if (timerId) clearInterval(timerId);
+    timerId = null;
+    elapsedMs = performance.now() - startedAt;
+  }
+
   async function send() {
     const q = input.trim();
     if (!q || isLoading) return;
-    //console.log('send query:', q);
 
     addMessage('user', q);
     input = '';
     isLoading = true;
+
+    startTimer();
+    await tick();           // ✅ 로딩 UI 반영 보장
     await scrollToBottom();
-    let params = {             query : q,               }
-
-
 
     try {
-      await fastapi('post', '/ai/ollamarag/?query='+q, {} , (json) => {
-        addMessage('assistant', extractAnswer(json));
+      await new Promise((resolve, reject) => {
+        fastapi('post', '/ai/ollamarag/?query=' + encodeURIComponent(q), {}, (json) => {
+          stopTimer();
+
+          addMessage('assistant' , extractAnswer(json)+' ['+formatMs(elapsedMs)+']' );
+          //addMessage('assistant', `처리 시간: ${formatMs(elapsedMs)}`);
+          console.log( '시간 : ', formatMs(elapsedMs) )
+
+          isLoading = false;
+          resolve(json);
+        });
       });
     } catch (e) {
+      stopTimer();
+
       const detail = e?.data ? extractAnswer(e.data) : (e?.message || String(e));
       addMessage('assistant', `오류: ${detail}`);
-    } finally {
+      //addMessage('assistant', `처리 시간(오류): ${formatMs(elapsedMs)}`);
+
       isLoading = false;
+    } finally {
       await scrollToBottom();
     }
   }
 
   function onKeyDown(e) {
-    // Enter 전송, Shift+Enter 줄바꿈
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -85,12 +123,21 @@
   }
 
   onMount(scrollToBottom);
+  onDestroy(() => {
+    if (timerId) clearInterval(timerId);
+  });
 </script>
 
 <div class="page">
   <header class="header">
-    <div class="title">Ollama RAG Chat</div>
+    <div class="title">Ollama RAG</div>
   </header>
+
+  {#if isLoading}
+    <div class="top-progress" aria-hidden="true">
+      <div class="top-progress__bar"></div>
+    </div>
+  {/if}
 
   <main class="chat">
     <div class="messages" bind:this={listEl} aria-live="polite">
@@ -107,7 +154,8 @@
         <div class="row assistant">
           <div class="bubble">
             <div class="role">Assistant</div>
-            <div class="typing">응답 생성 중...</div>
+            <!-- ✅ 로딩 중 경과 시간 표시 -->
+            <div class="typing">응답 생성 중... {formatMs(elapsedMs)}</div>
           </div>
         </div>
       {/if}
@@ -129,6 +177,7 @@
   </main>
 </div>
 
+
 <style>
   .page {
     height: 90vh;
@@ -149,10 +198,26 @@
     font-weight: 700;
   }
 
-  .subtitle {
-    margin-top: 4px;
-    font-size: 12px;
-    color: #a7adbb;
+  /* ✅ 상단 인디터미넌트 프로그레스 바 */
+  .top-progress {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    border-bottom: 1px solid #1e232b;
+  }
+
+  .top-progress__bar {
+    height: 100%;
+    width: 35%;
+    background: rgba(232, 232, 234, 0.85);
+    transform: translateX(-120%);
+    animation: top-progress-move 1.05s ease-in-out infinite;
+  }
+
+  @keyframes top-progress-move {
+    0%   { transform: translateX(-120%); }
+    50%  { transform: translateX(60%); }
+    100% { transform: translateX(240%); }
   }
 
   .chat {
