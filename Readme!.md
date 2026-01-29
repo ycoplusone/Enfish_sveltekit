@@ -14,6 +14,8 @@
     => npm install marked    
 > 10. 프론트엔드 빌드 => sveltkit의 빌드와 배포 방법에 대해서 추가로 study 필요.
     =>  npm run build
+> 11. 차트 라이브러리 
+    => npm install chart.js
 
 # 1. package.json 파일
 > node.js 프로젝트의 의존성을 정의한다.
